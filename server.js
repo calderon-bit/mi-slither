@@ -1,25 +1,26 @@
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const io = require('socket.io')(http, {
+    transports: ['websocket']
+});
 
 app.use(express.static(__dirname));
 
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
-const CANTIDAD_COMIDA = 250;
+const CANTIDAD_COMIDA = 200;
 
 let jugadores = {};
 let comida = [];
 
 function crearComida(x, y, valor = 1) {
     return {
-        id: Math.random().toString(36).substr(2, 9),
-        x: x !== undefined ? x : Math.random() * MAPA_ANCHO,
-        y: y !== undefined ? y : Math.random() * MAPA_ALTO,
-        radio: valor === 1 ? Math.random() * 4 + 3 : 8,
-        valor: valor,
-        color: `hsl(${Math.random() * 360}, 100%, 60%)`
+        x: Math.round(x !== undefined ? x : Math.random() * MAPA_ANCHO),
+        y: Math.round(y !== undefined ? y : Math.random() * MAPA_ALTO),
+        r: valor === 1 ? Math.round(Math.random() * 3 + 4) : 8,
+        v: valor,
+        c: `hsl(${Math.floor(Math.random() * 360)}, 100%, 60%)`
     };
 }
 
@@ -28,7 +29,10 @@ for (let i = 0; i < CANTIDAD_COMIDA; i++) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('unirse', (nombre) => {
+    socket.on('unirse', (datos) => {
+        const nombre = typeof datos === 'string' ? datos : datos.nombre;
+        const skin = (datos && datos.skin) ? datos.skin : 'neon';
+
         const startX = Math.random() * (MAPA_ANCHO - 400) + 200;
         const startY = Math.random() * (MAPA_ALTO - 400) + 200;
         let segmentos = [];
@@ -39,6 +43,7 @@ io.on('connection', (socket) => {
         jugadores[socket.id] = {
             id: socket.id,
             nombre: nombre || 'Jugador',
+            skin: skin,
             x: startX,
             y: startY,
             angulo: 0,
@@ -46,7 +51,7 @@ io.on('connection', (socket) => {
             longitud: 20,
             velocidad: 4.5,
             turbo: false,
-            color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+            color: `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`,
             segmentos: segmentos
         };
     });
@@ -91,8 +96,8 @@ setInterval(() => {
         for (let i = comida.length - 1; i >= 0; i--) {
             let c = comida[i];
             let dist = Math.hypot(j.x - c.x, j.y - c.y);
-            if (dist < j.radio + c.radio) {
-                j.longitud += c.valor * 0.6;
+            if (dist < j.radio + c.r) {
+                j.longitud += c.v * 0.6;
                 comida.splice(i, 1);
                 if (comida.length < CANTIDAD_COMIDA) {
                     comida.push(crearComida());
@@ -119,7 +124,26 @@ setInterval(() => {
         }
     }
 
-    io.emit('estado', { jugadores, comida, mapa: { ancho: MAPA_ANCHO, alto: MAPA_ALTO } });
+    // Empaquetar datos ligeros redondeados
+    let paqueteJugadores = {};
+    for (let id in jugadores) {
+        let j = jugadores[id];
+        paqueteJugadores[id] = {
+            id: j.id,
+            nombre: j.nombre,
+            skin: j.skin,
+            x: Math.round(j.x),
+            y: Math.round(j.y),
+            angulo: Number(j.angulo.toFixed(2)),
+            radio: Math.round(j.radio),
+            longitud: Math.floor(j.longitud),
+            turbo: j.turbo,
+            color: j.color,
+            segmentos: j.segmentos.map(s => ({ x: Math.round(s.x), y: Math.round(s.y) }))
+        };
+    }
+
+    io.emit('estado', { jugadores: paqueteJugadores, comida, mapa: { ancho: MAPA_ANCHO, alto: MAPA_ALTO } });
 }, 1000 / 30);
 
 function eliminarJugador(id) {
