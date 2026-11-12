@@ -7,7 +7,7 @@ app.use(express.static(__dirname));
 
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
-const CANTIDAD_COMIDA = 400;
+const CANTIDAD_COMIDA = 250;
 
 let jugadores = {};
 let comida = [];
@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
             angulo: 0,
             radio: 14,
             longitud: 20,
-            velocidad: 3.5,
+            velocidad: 4.5,
             turbo: false,
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
             segmentos: segmentos
@@ -71,8 +71,8 @@ setInterval(() => {
         let velActual = j.velocidad;
         if (j.turbo && j.longitud > 15) {
             velActual = j.velocidad * 1.8;
-            j.longitud -= 0.08;
-            if (Math.random() < 0.2) {
+            j.longitud -= 0.12;
+            if (Math.random() < 0.25) {
                 const cola = j.segmentos[j.segmentos.length - 1];
                 comida.push(crearComida(cola.x, cola.y, 1));
             }
@@ -120,7 +120,7 @@ setInterval(() => {
     }
 
     io.emit('estado', { jugadores, comida, mapa: { ancho: MAPA_ANCHO, alto: MAPA_ALTO } });
-}, 1000 / 60);
+}, 1000 / 30);
 
 function eliminarJugador(id) {
     const j = jugadores[id];
