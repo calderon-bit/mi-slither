@@ -3,7 +3,7 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
-app.use(express.static('public'));
+app.use(express.static(__dirname));
 
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
@@ -132,6 +132,7 @@ function eliminarJugador(id) {
     delete jugadores[id];
 }
 
-http.listen(3000, () => {
-    console.log('Servidor Slither listo en http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => {
+    console.log(`Servidor Slither listo en el puerto ${PORT}`);
 });
