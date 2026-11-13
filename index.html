@@ -6,36 +6,60 @@
     <title>Slither Online</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { overflow: hidden; background: #141820; color: white; }
+        body { overflow: hidden; background: #111418; color: #e8ecef; }
         canvas { display: block; }
         #menu {
-            position: absolute; inset: 0; background: rgba(12, 15, 22, 0.9);
+            position: absolute; inset: 0; background: rgba(14, 17, 22, 0.92);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             z-index: 10;
         }
-        h1 { font-size: 3.5rem; margin-bottom: 20px; color: #00ff88; }
+        h1 { font-size: 3.4rem; margin-bottom: 18px; color: #6ba382; letter-spacing: 3px; }
         input {
-            padding: 12px 20px; font-size: 1.1rem; border-radius: 25px; border: 2px solid #00ff88;
-            outline: none; margin-bottom: 18px; text-align: center; width: 260px; background: #1a1f2c; color: white;
+            padding: 12px 20px; font-size: 1.05rem; border-radius: 25px; border: 2px solid #3b7a57;
+            outline: none; margin-bottom: 16px; text-align: center; width: 260px; background: #1a1f26; color: #e8ecef;
+        }
+        .color-label { font-size: 0.95rem; color: #9aa5b1; margin-bottom: 12px; }
+        .colores-grid {
+            display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center; max-width: 280px;
+        }
+        .color-opt {
+            width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.18); transition: transform 0.15s, border-color 0.15s;
+            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.45), inset 2px 2px 4px rgba(255,255,255,0.2);
+        }
+        .color-opt.activo {
+            transform: scale(1.22); border: 3px solid #e8ecef;
         }
         button#btnJugar {
-            padding: 12px 45px; font-size: 1.2rem; border-radius: 25px; border: none;
-            background: #00ff88; color: #111; font-weight: bold; cursor: pointer;
+            padding: 12px 50px; font-size: 1.15rem; border-radius: 25px; border: none;
+            background: #3b7a57; color: #e8ecef; font-weight: bold; cursor: pointer;
         }
-        button#btnJugar:hover { background: #00e077; }
+        button#btnJugar:hover { background: #478f67; }
         #leaderboard {
-            position: absolute; top: 15px; right: 15px; background: rgba(0, 0, 0, 0.55);
+            position: absolute; top: 15px; right: 15px; background: rgba(15, 18, 22, 0.65);
             padding: 12px 18px; border-radius: 10px; min-width: 190px; pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.08);
         }
-        #leaderboard h3 { margin-bottom: 8px; color: #00ff88; font-size: 1rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
-        #listaTop { list-style: none; font-size: 0.9rem; }
-        #listaTop li { margin: 4px 0; display: flex; justify-content: space-between; }
+        #leaderboard h3 { margin-bottom: 8px; color: #6ba382; font-size: 0.95rem; border-bottom: 1px solid #282e38; padding-bottom: 4px; }
+        #listaTop { list-style: none; font-size: 0.88rem; }
+        #listaTop li { margin: 4px 0; display: flex; justify-content: space-between; color: #d0d7de; }
     </style>
 </head>
 <body>
     <div id="menu">
         <h1>SLITHER</h1>
         <input type="text" id="nombreInput" placeholder="Tu apodo..." maxlength="15">
+        <div class="color-label">Elige el color de tu gusanito:</div>
+        <div class="colores-grid" id="selectorColores">
+            <div class="color-opt activo" data-color="#3b7a57" style="background:#3b7a57" title="Verde bosque"></div>
+            <div class="color-opt" data-color="#2e5a88" style="background:#2e5a88" title="Azul acero"></div>
+            <div class="color-opt" data-color="#a8432b" style="background:#a8432b" title="Terracota"></div>
+            <div class="color-opt" data-color="#b5892e" style="background:#b5892e" title="Ocre dorado"></div>
+            <div class="color-opt" data-color="#6b4c7a" style="background:#6b4c7a" title="Ciruela"></div>
+            <div class="color-opt" data-color="#2f7373" style="background:#2f7373" title="Verde azulado"></div>
+            <div class="color-opt" data-color="#8c3b4a" style="background:#8c3b4a" title="Borgoña"></div>
+            <div class="color-opt" data-color="#5e6f41" style="background:#5e6f41" title="Verde oliva"></div>
+        </div>
         <button id="btnJugar">Jugar</button>
     </div>
 
