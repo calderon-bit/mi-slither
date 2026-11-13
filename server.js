@@ -9,7 +9,7 @@ app.use(express.static(__dirname));
 
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
-const CANTIDAD_COMIDA = 200;
+const CANTIDAD_COMIDA = 180;
 
 let jugadores = {};
 let comida = [];
@@ -29,10 +29,7 @@ for (let i = 0; i < CANTIDAD_COMIDA; i++) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('unirse', (datos) => {
-        const nombre = typeof datos === 'string' ? datos : datos.nombre;
-        const skin = (datos && datos.skin) ? datos.skin : 'neon';
-
+    socket.on('unirse', (nombre) => {
         const startX = Math.random() * (MAPA_ANCHO - 400) + 200;
         const startY = Math.random() * (MAPA_ALTO - 400) + 200;
         let segmentos = [];
@@ -42,8 +39,7 @@ io.on('connection', (socket) => {
 
         jugadores[socket.id] = {
             id: socket.id,
-            nombre: nombre || 'Jugador',
-            skin: skin,
+            nombre: (typeof nombre === 'string' && nombre.trim()) ? nombre.trim() : 'Jugador',
             x: startX,
             y: startY,
             angulo: 0,
@@ -124,14 +120,12 @@ setInterval(() => {
         }
     }
 
-    // Empaquetar datos ligeros redondeados
     let paqueteJugadores = {};
     for (let id in jugadores) {
         let j = jugadores[id];
         paqueteJugadores[id] = {
             id: j.id,
             nombre: j.nombre,
-            skin: j.skin,
             x: Math.round(j.x),
             y: Math.round(j.y),
             angulo: Number(j.angulo.toFixed(2)),
