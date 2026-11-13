@@ -2,37 +2,50 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Slither Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slither Online</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #161c22; font-family: Arial, sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { overflow: hidden; background: #141820; color: white; }
+        canvas { display: block; }
         #menu {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background: rgba(15, 20, 25, 0.85); color: white; z-index: 10;
+            position: absolute; inset: 0; background: rgba(12, 15, 22, 0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10;
         }
-        h1 { font-size: 60px; color: #00ff88; text-shadow: 0 0 20px #00ff88; margin-bottom: 20px; }
-        input { padding: 15px; font-size: 18px; border-radius: 25px; border: none; text-align: center; outline: none; margin-bottom: 15px; }
-        button { padding: 15px 40px; font-size: 20px; border-radius: 25px; border: none; background: #00ff88; color: #111; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px #00ff88; }
-        button:hover { background: #00cc6a; }
-        #ranking {
-            position: absolute; top: 15px; right: 15px; background: rgba(0, 0, 0, 0.5);
-            color: white; padding: 15px; border-radius: 10px; min-width: 180px; pointer-events: none;
+        h1 { font-size: 3.5rem; margin-bottom: 20px; color: #00ff88; }
+        input {
+            padding: 12px 20px; font-size: 1.1rem; border-radius: 25px; border: 2px solid #00ff88;
+            outline: none; margin-bottom: 18px; text-align: center; width: 260px; background: #1a1f2c; color: white;
         }
+        button#btnJugar {
+            padding: 12px 45px; font-size: 1.2rem; border-radius: 25px; border: none;
+            background: #00ff88; color: #111; font-weight: bold; cursor: pointer;
+        }
+        button#btnJugar:hover { background: #00e077; }
+        #leaderboard {
+            position: absolute; top: 15px; right: 15px; background: rgba(0, 0, 0, 0.55);
+            padding: 12px 18px; border-radius: 10px; min-width: 190px; pointer-events: none;
+        }
+        #leaderboard h3 { margin-bottom: 8px; color: #00ff88; font-size: 1rem; border-bottom: 1px solid #333; padding-bottom: 4px; }
+        #listaTop { list-style: none; font-size: 0.9rem; }
+        #listaTop li { margin: 4px 0; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
     <div id="menu">
         <h1>SLITHER</h1>
         <input type="text" id="nombreInput" placeholder="Tu apodo..." maxlength="15">
-        <button id="jugarBtn">Jugar</button>
+        <button id="btnJugar">Jugar</button>
     </div>
 
-    <div id="ranking">
-        <strong>Top Jugadores</strong>
-        <ol id="listaRanking" style="padding-left: 20px; margin-top: 8px;"></ol>
+    <div id="leaderboard">
+        <h3>Top Jugadores</h3>
+        <ul id="listaTop"></ul>
     </div>
 
     <canvas id="juego"></canvas>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>
