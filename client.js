@@ -7,18 +7,10 @@ const nombreInput = document.getElementById('nombreInput');
 const btnJugar = document.getElementById('btnJugar');
 const listaTop = document.getElementById('listaTop');
 
-let colorSeleccionado = '#3b7a57';
-document.querySelectorAll('.color-opt').forEach(opt => {
-    opt.addEventListener('click', () => {
-        document.querySelectorAll('.color-opt').forEach(o => o.classList.remove('activo'));
-        opt.classList.add('activo');
-        colorSeleccionado = opt.dataset.color;
-    });
-});
+const VELOCIDAD_GIRO = 0.125;
 
-const VELOCIDAD_GIRO = 0.085;
-
-let estado = { jugadores: {}, comida: [], poderes: [], mapa: { ancho: 3000, alto: 3000 } };
+let estado = { jugadores: {}, poderes: [], mapa: { ancho: 3000, alto: 3000 } };
+let comidaMapa = {};
 let visualJugadores = {};
 let mouse = { x: 0, y: 0 };
 let turbo = false;
@@ -111,7 +103,7 @@ ajustarPantalla();
 btnJugar.addEventListener('click', () => {
     const nombre = nombreInput.value.trim() || 'Jugador';
     delete visualJugadores[socket.id];
-    socket.emit('unirse', { nombre, color: colorSeleccionado });
+    socket.emit('unirse', nombre);
     menu.style.display = 'none';
     jugando = true;
 });
@@ -133,7 +125,20 @@ setInterval(() => {
     }
 }, 1000 / 25);
 
+socket.on('initComida', (lista) => {
+    comidaMapa = {};
+    for (let c of lista) {
+        comidaMapa[c.id] = c;
+    }
+});
+
 socket.on('estado', (nuevoEstado) => {
+    if (nuevoEstado.cDel) {
+        for (let id of nuevoEstado.cDel) delete comidaMapa[id];
+    }
+    if (nuevoEstado.cAdd) {
+        for (let c of nuevoEstado.cAdd) comidaMapa[c.id] = c;
+    }
     estado = nuevoEstado;
     actualizarTabla();
 });
@@ -164,6 +169,14 @@ function actualizarTabla() {
         .join('');
 }
 
+function reconstruirSegmentos(segsArray) {
+    let res = [];
+    for (let i = 0; i < segsArray.length; i += 2) {
+        res.push({ x: segsArray[i], y: segsArray[i + 1] });
+    }
+    return res;
+}
+
 function actualizarFisicaVisual(dt) {
     const escala = dt / (1000 / 30);
 
@@ -173,14 +186,34 @@ function actualizarFisicaVisual(dt) {
 
     for (let id in estado.jugadores) {
         const real = estado.jugadores[id];
+        const segsReales = reconstruirSegmentos(real.segs || []);
+
         if (!visualJugadores[id]) {
-            visualJugadores[id] = JSON.parse(JSON.stringify(real));
+            visualJugadores[id] = {
+                id: real.id,
+                nombre: real.nombre,
+                x: real.x,
+                y: real.y,
+                angulo: real.angulo,
+                radio: real.radio,
+                longitud: real.longitud,
+                turbo: real.turbo,
+                doble: real.doble,
+                fantasma: real.fantasma,
+                turboGratis: real.turboGratis,
+                tiempoDoble: real.tiempoDoble,
+                tiempoFantasma: real.tiempoFantasma,
+                tiempoTurbo: real.tiempoTurbo,
+                color: real.color,
+                segmentos: segsReales
+            };
             continue;
         }
 
         const vis = visualJugadores[id];
         vis.nombre = real.nombre;
         vis.radio = real.radio;
+        vis.longitud = real.longitud;
         vis.turbo = real.turbo;
         vis.doble = real.doble;
         vis.fantasma = real.fantasma;
@@ -208,28 +241,44 @@ function actualizarFisicaVisual(dt) {
             vis.x += Math.cos(vis.angulo) * vel * escala;
             vis.y += Math.sin(vis.angulo) * vel * escala;
 
-            vis.x += (real.x - vis.x) * 0.25;
-            vis.y += (real.y - vis.y) * 0.25;
+            const desfase = Math.hypot(real.x - vis.x, real.y - vis.y);
+            if (desfase > 45) {
+                vis.x += (real.x - vis.x) * 0.15;
+                vis.y += (real.y - vis.y) * 0.15;
+            }
+
+            vis.segmentos.unshift({ x: vis.x, y: vis.y });
+            const largoDeseado = Math.max(10, Math.floor(real.longitud / 2));
+            while (vis.segmentos.length > largoDeseado) {
+                vis.segmentos.pop();
+            }
+            for (let i = 1; i < vis.segmentos.length; i++) {
+                const prev = vis.segmentos[i - 1];
+                const curr = vis.segmentos[i];
+                const dx = prev.x - curr.x;
+                const dy = prev.y - curr.y;
+                const d = Math.hypot(dx, dy);
+                const sep = 8.5;
+                if (d > sep) {
+                    curr.x = prev.x - (dx / d) * sep;
+                    curr.y = prev.y - (dy / d) * sep;
+                }
+            }
         } else {
             vis.angulo = real.angulo;
             vis.x += (real.x - vis.x) * 0.35;
             vis.y += (real.y - vis.y) * 0.35;
-        }
 
-        while (vis.segmentos.length < real.segmentos.length) {
-            const ultimo = vis.segmentos[vis.segmentos.length - 1] || { x: vis.x, y: vis.y };
-            vis.segmentos.push({ x: ultimo.x, y: ultimo.y });
-        }
-        while (vis.segmentos.length > real.segmentos.length) {
-            vis.segmentos.pop();
-        }
-
-        if (vis.segmentos.length > 0) {
-            vis.segmentos[0].x = vis.x;
-            vis.segmentos[0].y = vis.y;
-            for (let i = 1; i < real.segmentos.length; i++) {
-                vis.segmentos[i].x += (real.segmentos[i].x - vis.segmentos[i].x) * 0.4;
-                vis.segmentos[i].y += (real.segmentos[i].y - vis.segmentos[i].y) * 0.4;
+            while (vis.segmentos.length < segsReales.length) {
+                const ultimo = vis.segmentos[vis.segmentos.length - 1] || { x: vis.x, y: vis.y };
+                vis.segmentos.push({ x: ultimo.x, y: ultimo.y });
+            }
+            while (vis.segmentos.length > segsReales.length) {
+                vis.segmentos.pop();
+            }
+            for (let i = 0; i < segsReales.length; i++) {
+                vis.segmentos[i].x += (segsReales[i].x - vis.segmentos[i].x) * 0.35;
+                vis.segmentos[i].y += (segsReales[i].y - vis.segmentos[i].y) * 0.35;
             }
         }
     }
@@ -269,7 +318,8 @@ function dibujarMinimapaSlither(miJugador) {
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(220, 220, 220, 0.25)';
-    for (let c of estado.comida) {
+    for (let cid in comidaMapa) {
+        const c = comidaMapa[cid];
         const nx = (c.x / estado.mapa.ancho) * 2 - 1;
         const ny = (c.y / estado.mapa.alto) * 2 - 1;
         const px = cx + nx * (radio - 6);
@@ -339,13 +389,9 @@ function dibujar(ahora) {
     ctx.lineWidth = 8;
     ctx.strokeRect(0, 0, estado.mapa.ancho, estado.mapa.alto);
 
-    for (let c of estado.comida) {
+    for (let cid in comidaMapa) {
+        const c = comidaMapa[cid];
         if (Math.abs(c.x - camX) > canvas.width / 2 + 25 || Math.abs(c.y - camY) > canvas.height / 2 + 25) continue;
-
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, c.r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-        ctx.fill();
 
         ctx.beginPath();
         ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
@@ -389,7 +435,7 @@ function dibujar(ahora) {
 
         for (let i = j.segmentos.length - 1; i >= 0; i--) {
             const seg = j.segmentos[i];
-            const esFranjaClara = (Math.floor(i / 3) % 2 === 0);
+            const esFranjaClara = (Math.floor(i / 2) % 2 === 0);
             const sprite = obtenerSpriteSegmento(j.color, j.radio, esFranjaClara);
             const offset = sprite.width / 2;
             ctx.drawImage(sprite, seg.x - offset, seg.y - offset);
