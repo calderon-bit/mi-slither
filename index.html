@@ -13,22 +13,10 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             z-index: 10;
         }
-        h1 { font-size: 3.4rem; margin-bottom: 18px; color: #6ba382; letter-spacing: 3px; }
+        h1 { font-size: 3.4rem; margin-bottom: 22px; color: #6ba382; letter-spacing: 3px; }
         input {
             padding: 12px 20px; font-size: 1.05rem; border-radius: 25px; border: 2px solid #3b7a57;
-            outline: none; margin-bottom: 16px; text-align: center; width: 260px; background: #1a1f26; color: #e8ecef;
-        }
-        .color-label { font-size: 0.95rem; color: #9aa5b1; margin-bottom: 12px; }
-        .colores-grid {
-            display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center; max-width: 280px;
-        }
-        .color-opt {
-            width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
-            border: 2px solid rgba(255,255,255,0.18); transition: transform 0.15s, border-color 0.15s;
-            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.45), inset 2px 2px 4px rgba(255,255,255,0.2);
-        }
-        .color-opt.activo {
-            transform: scale(1.22); border: 3px solid #e8ecef;
+            outline: none; margin-bottom: 20px; text-align: center; width: 260px; background: #1a1f26; color: #e8ecef;
         }
         button#btnJugar {
             padding: 12px 50px; font-size: 1.15rem; border-radius: 25px; border: none;
@@ -49,17 +37,6 @@
     <div id="menu">
         <h1>SLITHER</h1>
         <input type="text" id="nombreInput" placeholder="Tu apodo..." maxlength="15">
-        <div class="color-label">Elige el color de tu gusanito:</div>
-        <div class="colores-grid" id="selectorColores">
-            <div class="color-opt activo" data-color="#3b7a57" style="background:#3b7a57" title="Verde bosque"></div>
-            <div class="color-opt" data-color="#2e5a88" style="background:#2e5a88" title="Azul acero"></div>
-            <div class="color-opt" data-color="#a8432b" style="background:#a8432b" title="Terracota"></div>
-            <div class="color-opt" data-color="#b5892e" style="background:#b5892e" title="Ocre dorado"></div>
-            <div class="color-opt" data-color="#6b4c7a" style="background:#6b4c7a" title="Ciruela"></div>
-            <div class="color-opt" data-color="#2f7373" style="background:#2f7373" title="Verde azulado"></div>
-            <div class="color-opt" data-color="#8c3b4a" style="background:#8c3b4a" title="Borgoña"></div>
-            <div class="color-opt" data-color="#5e6f41" style="background:#5e6f41" title="Verde oliva"></div>
-        </div>
         <button id="btnJugar">Jugar</button>
     </div>
 
