@@ -10,7 +10,7 @@ app.use(express.static(__dirname));
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
 const CANTIDAD_COMIDA = 650;
-const VELOCIDAD_GIRO = 0.085;
+const VELOCIDAD_GIRO = 0.125;
 
 const PALETA_REALISTA = [
     '#3b7a57', '#2e5a88', '#a8432b', '#b5892e',
@@ -24,17 +24,22 @@ const COLORES_COMIDA = [
 const OTROS_PODERES = ['fantasma', 'turbo'];
 
 let jugadores = {};
-let comida = [];
+let comida = {};
 let poderes = [];
+let nextComidaId = 1;
 
-function crearComida(x, y, valor = 1) {
-    return {
+function agregarComida(x, y, valor = 1) {
+    const id = nextComidaId++;
+    const item = {
+        id: id,
         x: Math.round(x !== undefined ? x : Math.random() * MAPA_ANCHO),
         y: Math.round(y !== undefined ? y : Math.random() * MAPA_ALTO),
         r: valor === 1 ? Math.round(Math.random() * 2 + 4) : 8,
         v: valor,
         c: COLORES_COMIDA[Math.floor(Math.random() * COLORES_COMIDA.length)]
     };
+    comida[id] = item;
+    return item;
 }
 
 function crearPoder(tipoForzado) {
@@ -49,17 +54,15 @@ function crearPoder(tipoForzado) {
 }
 
 for (let i = 0; i < CANTIDAD_COMIDA; i++) {
-    comida.push(crearComida());
+    agregarComida();
 }
 crearPoder('x2');
 crearPoder();
 
-// Cada 30 segundos exactos aparece un orbe x2
 setInterval(() => {
     crearPoder('x2');
 }, 30000);
 
-// Cada 45 segundos aparece un poder extra (Invencible o Turbo Max)
 setInterval(() => {
     crearPoder();
 }, 45000);
@@ -71,15 +74,14 @@ function normalizarAngulo(ang) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('unirse', (datos) => {
-        const nombreRaw = typeof datos === 'string' ? datos : (datos && datos.nombre);
-        const nombre = (typeof nombreRaw === 'string' && nombreRaw.trim()) ? nombreRaw.trim().slice(0, 15) : 'Jugador';
+    socket.emit('initComida', Object.values(comida));
 
-        const colorSolicitado = datos && datos.color;
-        const colorElegido = PALETA_REALISTA.includes(colorSolicitado)
-            ? colorSolicitado
-            : PALETA_REALISTA[Math.floor(Math.random() * PALETA_REALISTA.length)];
+    socket.on('unirse', (nombreRaw) => {
+        const nombre = (typeof nombreRaw === 'string' && nombreRaw.trim())
+            ? nombreRaw.trim().slice(0, 15)
+            : 'Jugador';
 
+        const colorElegido = PALETA_REALISTA[Math.floor(Math.random() * PALETA_REALISTA.length)];
         const startX = Math.random() * (MAPA_ANCHO - 400) + 200;
         const startY = Math.random() * (MAPA_ALTO - 400) + 200;
         let segmentos = [];
@@ -121,6 +123,8 @@ io.on('connection', (socket) => {
 
 setInterval(() => {
     const ahora = Date.now();
+    let comidaNueva = [];
+    let comidaBorrada = [];
 
     for (let id in jugadores) {
         let j = jugadores[id];
@@ -142,7 +146,7 @@ setInterval(() => {
             j.longitud -= 0.12;
             if (Math.random() < 0.25) {
                 const cola = j.segmentos[j.segmentos.length - 1];
-                comida.push(crearComida(cola.x, cola.y, 1));
+                comidaNueva.push(agregarComida(cola.x, cola.y, 1));
             }
         }
 
@@ -156,7 +160,6 @@ setInterval(() => {
 
         j.radio = Math.min(28, 14 + (j.longitud - 20) * 0.03);
 
-        // Recoger orbes de poder
         for (let i = poderes.length - 1; i >= 0; i--) {
             let p = poderes[i];
             if (Math.hypot(j.x - p.x, j.y - p.y) < j.radio + 18) {
@@ -169,28 +172,26 @@ setInterval(() => {
 
         const multiplicador = (ahora < j.dobleHasta) ? 2 : 1;
 
-        // Comer puntitos
-        for (let i = comida.length - 1; i >= 0; i--) {
-            let c = comida[i];
+        for (let cid in comida) {
+            let c = comida[cid];
             if (Math.abs(j.x - c.x) > 45 || Math.abs(j.y - c.y) > 45) continue;
 
             let dist = Math.hypot(j.x - c.x, j.y - c.y);
             if (dist < j.radio + c.r) {
                 j.longitud += c.v * 0.6 * multiplicador;
-                comida.splice(i, 1);
-                if (comida.length < CANTIDAD_COMIDA) {
-                    comida.push(crearComida());
+                comidaBorrada.push(c.id);
+                delete comida[cid];
+                if (Object.keys(comida).length < CANTIDAD_COMIDA) {
+                    comidaNueva.push(agregarComida());
                 }
             }
         }
 
-        // Borde del mapa
         if (j.x < 0 || j.x > MAPA_ANCHO || j.y < 0 || j.y > MAPA_ALTO) {
-            eliminarJugador(id, null);
+            eliminarJugador(id, null, comidaNueva);
             continue;
         }
 
-        // Colisión con otros jugadores
         if (ahora >= j.fantasmaHasta) {
             for (let otroId in jugadores) {
                 if (id === otroId) continue;
@@ -201,7 +202,7 @@ setInterval(() => {
                     if (Math.abs(j.x - seg.x) > 60 || Math.abs(j.y - seg.y) > 60) continue;
                     let dist = Math.hypot(j.x - seg.x, j.y - seg.y);
                     if (dist < j.radio + otro.radio - 4) {
-                        eliminarJugador(id, otroId);
+                        eliminarJugador(id, otroId, comidaNueva);
                         break;
                     }
                 }
@@ -213,6 +214,11 @@ setInterval(() => {
     let paqueteJugadores = {};
     for (let id in jugadores) {
         let j = jugadores[id];
+        let segsCompactos = [];
+        for (let i = 0; i < j.segmentos.length; i += 2) {
+            segsCompactos.push(Math.round(j.segmentos[i].x), Math.round(j.segmentos[i].y));
+        }
+
         paqueteJugadores[id] = {
             id: j.id,
             nombre: j.nombre,
@@ -229,24 +235,27 @@ setInterval(() => {
             tiempoFantasma: Math.max(0, Math.ceil((j.fantasmaHasta - ahora) / 1000)),
             tiempoTurbo: Math.max(0, Math.ceil((j.turboGratisHasta - ahora) / 1000)),
             color: j.color,
-            segmentos: j.segmentos.map(s => ({ x: Math.round(s.x), y: Math.round(s.y) }))
+            segs: segsCompactos
         };
     }
 
-    io.emit('estado', {
+    let payload = {
         jugadores: paqueteJugadores,
-        comida,
         poderes,
         mapa: { ancho: MAPA_ANCHO, alto: MAPA_ALTO }
-    });
+    };
+    if (comidaNueva.length > 0) payload.cAdd = comidaNueva;
+    if (comidaBorrada.length > 0) payload.cDel = comidaBorrada;
+
+    io.emit('estado', payload);
 }, 1000 / 30);
 
-function eliminarJugador(id, asesinoId) {
+function eliminarJugador(id, asesinoId, comidaNueva) {
     const j = jugadores[id];
     if (!j) return;
 
     for (let i = 0; i < j.segmentos.length; i += 2) {
-        comida.push(crearComida(j.segmentos[i].x, j.segmentos[i].y, 3));
+        comidaNueva.push(agregarComida(j.segmentos[i].x, j.segmentos[i].y, 3));
     }
 
     if (asesinoId && jugadores[asesinoId]) {
