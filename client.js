@@ -110,6 +110,7 @@ ajustarPantalla();
 
 btnJugar.addEventListener('click', () => {
     const nombre = nombreInput.value.trim() || 'Jugador';
+    delete visualJugadores[socket.id];
     socket.emit('unirse', { nombre, color: colorSeleccionado });
     menu.style.display = 'none';
     jugando = true;
@@ -143,6 +144,7 @@ socket.on('eliminacion', (victima) => {
 
 socket.on('muerto', () => {
     jugando = false;
+    delete visualJugadores[socket.id];
     menu.style.display = 'flex';
 });
 
@@ -181,11 +183,9 @@ function actualizarFisicaVisual(dt) {
         vis.radio = real.radio;
         vis.turbo = real.turbo;
         vis.doble = real.doble;
-        vis.iman = real.iman;
         vis.fantasma = real.fantasma;
         vis.turboGratis = real.turboGratis;
         vis.tiempoDoble = real.tiempoDoble;
-        vis.tiempoIman = real.tiempoIman;
         vis.tiempoFantasma = real.tiempoFantasma;
         vis.tiempoTurbo = real.tiempoTurbo;
         vis.color = real.color;
@@ -238,7 +238,6 @@ function actualizarFisicaVisual(dt) {
 function obtenerEstiloPoder(tipo) {
     switch (tipo) {
         case 'x2': return { color: '#d4a338', borde: '#8a6518', texto: 'x2' };
-        case 'iman': return { color: '#4c86b5', borde: '#284c6b', texto: 'IMÁN' };
         case 'fantasma': return { color: '#8a6ba8', borde: '#4c3861', texto: 'INV' };
         case 'turbo': return { color: '#4d9c6e', borde: '#29593d', texto: 'VEL' };
         default: return { color: '#d4a338', borde: '#8a6518', texto: 'x2' };
@@ -354,7 +353,6 @@ function dibujar(ahora) {
         ctx.fill();
     }
 
-    // Orbes de poder chetados en el mapa
     if (estado.poderes) {
         const pulso = Math.sin(ahora / 200) * 3;
         for (let p of estado.poderes) {
@@ -386,16 +384,7 @@ function dibujar(ahora) {
 
         ctx.save();
         if (j.fantasma) {
-            ctx.globalAlpha = 0.45; // Efecto visual de invencibilidad fantasma
-        }
-
-        // Aro de campo magnético si tiene el imán activo
-        if (j.iman) {
-            ctx.beginPath();
-            ctx.arc(j.x, j.y, 140, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(76, 134, 181, 0.25)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.globalAlpha = 0.45;
         }
 
         for (let i = j.segmentos.length - 1; i >= 0; i--) {
@@ -453,11 +442,9 @@ function dibujar(ahora) {
 
     ctx.restore();
 
-    // Indicadores activos en la parte superior
     if (jugando && yo) {
         let avisos = [];
         if (yo.doble) avisos.push(`x2 (${yo.tiempoDoble}s)`);
-        if (yo.iman) avisos.push(`IMÁN (${yo.tiempoIman}s)`);
         if (yo.fantasma) avisos.push(`INVENCIBLE (${yo.tiempoFantasma}s)`);
         if (yo.turboGratis) avisos.push(`TURBO MAX (${yo.tiempoTurbo}s)`);
 
