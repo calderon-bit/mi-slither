@@ -7,9 +7,18 @@ const nombreInput = document.getElementById('nombreInput');
 const btnJugar = document.getElementById('btnJugar');
 const listaTop = document.getElementById('listaTop');
 
+let colorSeleccionado = '#3b7a57';
+document.querySelectorAll('.color-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+        document.querySelectorAll('.color-opt').forEach(o => o.classList.remove('activo'));
+        opt.classList.add('activo');
+        colorSeleccionado = opt.dataset.color;
+    });
+});
+
 const VELOCIDAD_GIRO = 0.085;
 
-let estado = { jugadores: {}, comida: [], orbesX2: [], mapa: { ancho: 3000, alto: 3000 } };
+let estado = { jugadores: {}, comida: [], poderes: [], mapa: { ancho: 3000, alto: 3000 } };
 let visualJugadores = {};
 let mouse = { x: 0, y: 0 };
 let turbo = false;
@@ -17,8 +26,8 @@ let jugando = false;
 let camX = 1500;
 let camY = 1500;
 let ultimoTiempo = performance.now();
+let mensajeKill = { texto: '', hasta: 0 };
 
-// Textura hexagonal realista pre-renderizada (cero consumo de FPS)
 const patronSuelo = (() => {
     const tile = document.createElement('canvas');
     const r = 28;
@@ -55,7 +64,6 @@ const patronSuelo = (() => {
     return ctx.createPattern(tile, 'repeat');
 })();
 
-// Caché de esferas 3D sombreadas para que las serpientes tengan volumen realista sin lag
 const cacheSegmentos = {};
 function obtenerSpriteSegmento(color, radio, esClaro) {
     const key = `${color}_${radio}_${esClaro ? 1 : 0}`;
@@ -68,13 +76,11 @@ function obtenerSpriteSegmento(color, radio, esClaro) {
     const sctx = c.getContext('2d');
     const mid = size / 2;
 
-    // Sombra suave debajo del segmento
     sctx.beginPath();
     sctx.arc(mid, mid + 2, radio, 0, Math.PI * 2);
     sctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     sctx.fill();
 
-    // Degradado esférico 3D (luz superior izquierda, sombra inferior)
     const grad = sctx.createRadialGradient(
         mid - radio * 0.3, mid - radio * 0.3, radio * 0.1,
         mid, mid, radio
@@ -104,7 +110,7 @@ ajustarPantalla();
 
 btnJugar.addEventListener('click', () => {
     const nombre = nombreInput.value.trim() || 'Jugador';
-    socket.emit('unirse', nombre);
+    socket.emit('unirse', { nombre, color: colorSeleccionado });
     menu.style.display = 'none';
     jugando = true;
 });
@@ -129,6 +135,10 @@ setInterval(() => {
 socket.on('estado', (nuevoEstado) => {
     estado = nuevoEstado;
     actualizarTabla();
+});
+
+socket.on('eliminacion', (victima) => {
+    mensajeKill = { texto: `¡ELIMINASTE A ${victima.toUpperCase()}! (+120 PTS)`, hasta: Date.now() + 3000 };
 });
 
 socket.on('muerto', () => {
@@ -171,7 +181,13 @@ function actualizarFisicaVisual(dt) {
         vis.radio = real.radio;
         vis.turbo = real.turbo;
         vis.doble = real.doble;
+        vis.iman = real.iman;
+        vis.fantasma = real.fantasma;
+        vis.turboGratis = real.turboGratis;
         vis.tiempoDoble = real.tiempoDoble;
+        vis.tiempoIman = real.tiempoIman;
+        vis.tiempoFantasma = real.tiempoFantasma;
+        vis.tiempoTurbo = real.tiempoTurbo;
         vis.color = real.color;
 
         if (id === socket.id) {
@@ -185,7 +201,10 @@ function actualizarFisicaVisual(dt) {
                 vis.angulo = normalizarAngulo(vis.angulo + Math.sign(diff) * pasoGiro);
             }
 
-            const vel = (turbo && real.longitud > 15) ? 4.5 * 1.8 : 4.5;
+            let vel = 4.5;
+            if (real.turboGratis) vel = 4.5 * 1.9;
+            else if (turbo && real.longitud > 15) vel = 4.5 * 1.8;
+
             vis.x += Math.cos(vis.angulo) * vel * escala;
             vis.y += Math.sin(vis.angulo) * vel * escala;
 
@@ -213,6 +232,16 @@ function actualizarFisicaVisual(dt) {
                 vis.segmentos[i].y += (real.segmentos[i].y - vis.segmentos[i].y) * 0.4;
             }
         }
+    }
+}
+
+function obtenerEstiloPoder(tipo) {
+    switch (tipo) {
+        case 'x2': return { color: '#d4a338', borde: '#8a6518', texto: 'x2' };
+        case 'iman': return { color: '#4c86b5', borde: '#284c6b', texto: 'IMÁN' };
+        case 'fantasma': return { color: '#8a6ba8', borde: '#4c3861', texto: 'INV' };
+        case 'turbo': return { color: '#4d9c6e', borde: '#29593d', texto: 'VEL' };
+        default: return { color: '#d4a338', borde: '#8a6518', texto: 'x2' };
     }
 }
 
@@ -251,14 +280,15 @@ function dibujarMinimapaSlither(miJugador) {
         }
     }
 
-    if (estado.orbesX2) {
-        for (let o of estado.orbesX2) {
-            const nx = (o.x / estado.mapa.ancho) * 2 - 1;
-            const ny = (o.y / estado.mapa.alto) * 2 - 1;
+    if (estado.poderes) {
+        for (let p of estado.poderes) {
+            const nx = (p.x / estado.mapa.ancho) * 2 - 1;
+            const ny = (p.y / estado.mapa.alto) * 2 - 1;
             const px = cx + nx * (radio - 6);
             const py = cy + ny * (radio - 6);
+            const estilo = obtenerEstiloPoder(p.tipo);
             ctx.beginPath();
-            ctx.fillStyle = '#d4a338';
+            ctx.fillStyle = estilo.color;
             ctx.arc(px, py, 3.5, 0, Math.PI * 2);
             ctx.fill();
         }
@@ -303,16 +333,13 @@ function dibujar(ahora) {
     ctx.save();
     ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
 
-    // Suelo hexagonal texturizado dentro del área de juego
     ctx.fillStyle = patronSuelo;
     ctx.fillRect(0, 0, estado.mapa.ancho, estado.mapa.alto);
 
-    // Borde de arena/límite natural oscuro con línea roja tenue
     ctx.strokeStyle = '#8f2d2d';
     ctx.lineWidth = 8;
     ctx.strokeRect(0, 0, estado.mapa.ancho, estado.mapa.alto);
 
-    // Puntitos de comida orgánicos con brillo sutil
     for (let c of estado.comida) {
         if (Math.abs(c.x - camX) > canvas.width / 2 + 25 || Math.abs(c.y - camY) > canvas.height / 2 + 25) continue;
 
@@ -327,34 +354,49 @@ function dibujar(ahora) {
         ctx.fill();
     }
 
-    // Orbes especiales x2 (ámbar dorado natural)
-    if (estado.orbesX2) {
+    // Orbes de poder chetados en el mapa
+    if (estado.poderes) {
         const pulso = Math.sin(ahora / 200) * 3;
-        for (let o of estado.orbesX2) {
+        for (let p of estado.poderes) {
+            const estilo = obtenerEstiloPoder(p.tipo);
+
             ctx.beginPath();
-            ctx.arc(o.x, o.y, 19 + pulso, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(212, 163, 56, 0.22)';
+            ctx.arc(p.x, p.y, 20 + pulso, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
             ctx.fill();
 
             ctx.beginPath();
-            ctx.arc(o.x, o.y, 13, 0, Math.PI * 2);
-            ctx.fillStyle = '#d4a338';
+            ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+            ctx.fillStyle = estilo.color;
             ctx.fill();
-            ctx.strokeStyle = '#8a6518';
+            ctx.strokeStyle = estilo.borde;
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
-            ctx.fillStyle = '#181c22';
-            ctx.font = 'bold 11px sans-serif';
+            ctx.fillStyle = '#111418';
+            ctx.font = 'bold 10px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('x2', o.x, o.y);
+            ctx.fillText(estilo.texto, p.x, p.y);
         }
     }
 
-    // Serpientes con volumen 3D y patrón de escamas natural
     for (let id in visualJugadores) {
         const j = visualJugadores[id];
+
+        ctx.save();
+        if (j.fantasma) {
+            ctx.globalAlpha = 0.45; // Efecto visual de invencibilidad fantasma
+        }
+
+        // Aro de campo magnético si tiene el imán activo
+        if (j.iman) {
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 140, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(76, 134, 181, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
 
         for (let i = j.segmentos.length - 1; i >= 0; i--) {
             const seg = j.segmentos[i];
@@ -364,9 +406,8 @@ function dibujar(ahora) {
             ctx.drawImage(sprite, seg.x - offset, seg.y - offset);
         }
 
-        // Halo sutil si tiene x2 o turbo
-        if (j.doble) {
-            ctx.strokeStyle = 'rgba(212, 163, 56, 0.7)';
+        if (j.doble || j.turboGratis) {
+            ctx.strokeStyle = j.doble ? 'rgba(212, 163, 56, 0.7)' : 'rgba(77, 156, 110, 0.7)';
             ctx.lineWidth = 2.5;
             ctx.beginPath();
             ctx.arc(j.x, j.y, j.radio + 3, 0, Math.PI * 2);
@@ -379,7 +420,6 @@ function dibujar(ahora) {
             ctx.stroke();
         }
 
-        // Ojos realistas con pupila orientada hacia la dirección de movimiento
         const ojoDist = j.radio * 0.52;
         const ojoRadio = j.radio * 0.32;
         const ang1 = j.angulo - 0.52;
@@ -402,7 +442,8 @@ function dibujar(ahora) {
         ctx.arc(ox2 + Math.cos(j.angulo) * (ojoRadio * 0.42), oy2 + Math.sin(j.angulo) * (ojoRadio * 0.42), ojoRadio * 0.55, 0, Math.PI * 2);
         ctx.fill();
 
-        // Apodo discreto
+        ctx.restore();
+
         ctx.fillStyle = j.doble ? '#e6be6a' : 'rgba(232, 236, 239, 0.88)';
         ctx.font = 'bold 13px sans-serif';
         ctx.textAlign = 'center';
@@ -412,14 +453,28 @@ function dibujar(ahora) {
 
     ctx.restore();
 
-    if (jugando && yo && yo.doble) {
-        ctx.fillStyle = '#e6be6a';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`PUNTOS x2 ACTIVO (${yo.tiempoDoble}s)`, canvas.width / 2, 34);
-    }
+    // Indicadores activos en la parte superior
+    if (jugando && yo) {
+        let avisos = [];
+        if (yo.doble) avisos.push(`x2 (${yo.tiempoDoble}s)`);
+        if (yo.iman) avisos.push(`IMÁN (${yo.tiempoIman}s)`);
+        if (yo.fantasma) avisos.push(`INVENCIBLE (${yo.tiempoFantasma}s)`);
+        if (yo.turboGratis) avisos.push(`TURBO MAX (${yo.tiempoTurbo}s)`);
 
-    if (jugando) {
+        if (avisos.length > 0) {
+            ctx.fillStyle = '#e6be6a';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(avisos.join('  •  '), canvas.width / 2, 32);
+        }
+
+        if (Date.now() < mensajeKill.hasta) {
+            ctx.fillStyle = '#6ba382';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(mensajeKill.texto, canvas.width / 2, 60);
+        }
+
         dibujarMinimapaSlither(yo);
     }
 
