@@ -9,7 +9,7 @@ app.use(express.static(__dirname));
 
 const MAPA_ANCHO = 3000;
 const MAPA_ALTO = 3000;
-const CANTIDAD_COMIDA = 450;
+const CANTIDAD_COMIDA = 650;
 const VELOCIDAD_GIRO = 0.085;
 
 const PALETA_REALISTA = [
@@ -21,7 +21,7 @@ const COLORES_COMIDA = [
     '#d97757', '#6ba382', '#5b8fb9', '#d4a359', '#9c7ca5', '#c96464'
 ];
 
-const TIPOS_PODER = ['x2', 'iman', 'fantasma', 'turbo'];
+const OTROS_PODERES = ['fantasma', 'turbo'];
 
 let jugadores = {};
 let comida = [];
@@ -37,9 +37,9 @@ function crearComida(x, y, valor = 1) {
     };
 }
 
-function crearPoder() {
-    if (poderes.length >= 4) return;
-    const tipo = TIPOS_PODER[Math.floor(Math.random() * TIPOS_PODER.length)];
+function crearPoder(tipoForzado) {
+    if (poderes.length >= 5) return;
+    const tipo = tipoForzado || OTROS_PODERES[Math.floor(Math.random() * OTROS_PODERES.length)];
     poderes.push({
         id: Math.random().toString(36).substr(2, 6),
         tipo: tipo,
@@ -51,13 +51,18 @@ function crearPoder() {
 for (let i = 0; i < CANTIDAD_COMIDA; i++) {
     comida.push(crearComida());
 }
-crearPoder();
+crearPoder('x2');
 crearPoder();
 
-// Aparece un poder chetado aleatorio cada 35 segundos
+// Cada 30 segundos exactos aparece un orbe x2
+setInterval(() => {
+    crearPoder('x2');
+}, 30000);
+
+// Cada 45 segundos aparece un poder extra (Invencible o Turbo Max)
 setInterval(() => {
     crearPoder();
-}, 35000);
+}, 45000);
 
 function normalizarAngulo(ang) {
     while (ang > Math.PI) ang -= Math.PI * 2;
@@ -94,10 +99,8 @@ io.on('connection', (socket) => {
             velocidad: 4.5,
             turbo: false,
             dobleHasta: 0,
-            imanHasta: 0,
             fantasmaHasta: 0,
             turboGratisHasta: 0,
-            kills: 0,
             color: colorElegido,
             segmentos: segmentos
         };
@@ -105,9 +108,9 @@ io.on('connection', (socket) => {
 
     socket.on('input', (datos) => {
         const j = jugadores[socket.id];
-        if (j) {
+        if (j && typeof datos.angulo === 'number' && !isNaN(datos.angulo)) {
             j.anguloObjetivo = datos.angulo;
-            j.turbo = datos.turbo;
+            j.turbo = Boolean(datos.turbo);
         }
     });
 
@@ -158,7 +161,6 @@ setInterval(() => {
             let p = poderes[i];
             if (Math.hypot(j.x - p.x, j.y - p.y) < j.radio + 18) {
                 if (p.tipo === 'x2') j.dobleHasta = ahora + 15000;
-                if (p.tipo === 'iman') j.imanHasta = ahora + 12000;
                 if (p.tipo === 'fantasma') j.fantasmaHasta = ahora + 8000;
                 if (p.tipo === 'turbo') j.turboGratisHasta = ahora + 10000;
                 poderes.splice(i, 1);
@@ -166,21 +168,13 @@ setInterval(() => {
         }
 
         const multiplicador = (ahora < j.dobleHasta) ? 2 : 1;
-        const tieneIman = ahora < j.imanHasta;
 
-        // Comer puntitos (con atracción magnética si tiene imán)
+        // Comer puntitos
         for (let i = comida.length - 1; i >= 0; i--) {
             let c = comida[i];
-            let dx = j.x - c.x;
-            let dy = j.y - c.y;
-            let dist = Math.hypot(dx, dy);
+            if (Math.abs(j.x - c.x) > 45 || Math.abs(j.y - c.y) > 45) continue;
 
-            if (tieneIman && dist < 170 && dist > 1) {
-                c.x += Math.round((dx / dist) * 9);
-                c.y += Math.round((dy / dist) * 9);
-                dist = Math.hypot(j.x - c.x, j.y - c.y);
-            }
-
+            let dist = Math.hypot(j.x - c.x, j.y - c.y);
             if (dist < j.radio + c.r) {
                 j.longitud += c.v * 0.6 * multiplicador;
                 comida.splice(i, 1);
@@ -190,20 +184,21 @@ setInterval(() => {
             }
         }
 
-        // Borde del mapa (mata incluso en modo fantasma para no salir del mundo)
+        // Borde del mapa
         if (j.x < 0 || j.x > MAPA_ANCHO || j.y < 0 || j.y > MAPA_ALTO) {
             eliminarJugador(id, null);
             continue;
         }
 
-        // Colisión con otros jugadores (ignorada si tiene modo fantasma)
+        // Colisión con otros jugadores
         if (ahora >= j.fantasmaHasta) {
             for (let otroId in jugadores) {
                 if (id === otroId) continue;
                 let otro = jugadores[otroId];
-                if (ahora < otro.fantasmaHasta) continue; // Los fantasmas tampoco chocan
+                if (ahora < otro.fantasmaHasta) continue;
 
                 for (let seg of otro.segmentos) {
+                    if (Math.abs(j.x - seg.x) > 60 || Math.abs(j.y - seg.y) > 60) continue;
                     let dist = Math.hypot(j.x - seg.x, j.y - seg.y);
                     if (dist < j.radio + otro.radio - 4) {
                         eliminarJugador(id, otroId);
@@ -228,11 +223,9 @@ setInterval(() => {
             longitud: Math.floor(j.longitud),
             turbo: j.turbo || (ahora < j.turboGratisHasta),
             doble: ahora < j.dobleHasta,
-            iman: ahora < j.imanHasta,
             fantasma: ahora < j.fantasmaHasta,
             turboGratis: ahora < j.turboGratisHasta,
             tiempoDoble: Math.max(0, Math.ceil((j.dobleHasta - ahora) / 1000)),
-            tiempoIman: Math.max(0, Math.ceil((j.imanHasta - ahora) / 1000)),
             tiempoFantasma: Math.max(0, Math.ceil((j.fantasmaHasta - ahora) / 1000)),
             tiempoTurbo: Math.max(0, Math.ceil((j.turboGratisHasta - ahora) / 1000)),
             color: j.color,
@@ -257,8 +250,7 @@ function eliminarJugador(id, asesinoId) {
     }
 
     if (asesinoId && jugadores[asesinoId]) {
-        jugadores[asesinoId].longitud += 12; // Recompensa directa por eliminación
-        jugadores[asesinoId].kills += 1;
+        jugadores[asesinoId].longitud += 12;
         io.to(asesinoId).emit('eliminacion', j.nombre);
     }
 
